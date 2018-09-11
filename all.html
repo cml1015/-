@@ -1,0 +1,73 @@
+一、web端页面上展示微信支付和支付宝支付(扫描二维码)
+	<script>
+		//主要还是后端来写接口去对接微信支付接口
+		//前端部分写一个定时器去定时请求扫码成功以后后端返回的状态值  只要检测到支付成功就关闭定时器，并且跳转到支付成功以后的页面
+		//代码如下：
+		<img :src="img" class="erwm" v-show="imgShow">
+		this.img= config.url+"/order/wxQrCode?userId=2&orderNumber="+this.info.orderNumber+"&clientType=1"
+
+		//定时器去请求
+		status(){//请求支付的接口
+            this.$axios.post(config.url+"/order/payResult",{
+              userId:'2',
+              orderNumber:this.info.orderNumber,
+              clientType:"1"
+            }).then(res=>{
+                if(res){
+                  console.log(res.data)
+                  if(res.data.data.result=="SUCCESS" && res.data.data.code==200){//定时去请求捕获是否支付成功
+                    clearTimeout(this.time)
+                    this.$message.success("支付成功");
+                    window.location.href ="/"
+                  }else{
+                    this.time=setTimeout(()=>{
+                      this.status()
+                    },2000)
+                  }
+
+                } else{
+                // alert(res.data.msg)
+                this.$message.error("失败");
+              }
+            })
+          }
+	</script>
+
+
+
+
+二、视频的解密播放(七牛云)
+	<video-player  class="video-player vjs-custom-skin"
+                           ref="videoPlayer"
+                           :playsinline="true"
+                           :options="playerOptions"
+            ></video-player>
+    <script>
+    	 playerOptions : {//vue自带的播放视频的插件
+              playbackRates: [0.7, 1.0, 1.5, 2.0], //播放速度
+              autoplay: false, //如果true,浏览器准备好时开始回放。
+              muted: false, // 默认情况下将会消除任何音频。
+              loop: false, // 导致视频一结束就重新开始。
+              preload: 'auto', // 建议浏览器在<video>加载元素后是否应该开始下载视频数据。auto浏览器选择最佳行为,立即开始加载视频（如果浏览器支持）
+              language: 'zh-CN',
+              aspectRatio: '16:9', // 将播放器置于流畅模式，并在计算播放器的动态大小时使用该值。值应该代表一个比例 - 用冒号分隔的两个数字（例如"16:9"或"4:3"）
+              fluid: true, // 当true时，Video.js player将拥有流体大小。换句话说，它将按比例缩放以适应其容器。
+              sources: [{
+                type: "application/x-mpegURL",
+                src:''//
+                // src: "http://om6e0t9hh.bkt.clouddn.com/video/teach/pggs.mp4" //url地址
+                // src:'http://image.datalove.cn/aaaa2.m3u8',
+                // src:'http://image.datalove.cn/video/education/FC5CA5EFC56241ABA30583719C07A9B7.m3u8'
+              }],
+              poster: "../../static/images/test.jpg", //你的封面地址
+              // width: document.documentElement.clientWidth,
+              notSupportedMessage: '此视频暂无法播放，请稍后再试', //允许覆盖Video.js无法播放媒体源时显示的默认信息。
+              controlBar: {
+                timeDivider: true,
+                durationDisplay: true,
+                remainingTimeDisplay: false,
+                fullscreenToggle: true  //全屏按钮
+              }
+            }
+            //请求接口的数据里面去视频的字段赋值给playerOptions里面的src
+    </script>

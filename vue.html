@@ -1,0 +1,282 @@
+vue  elementUI框架
+
+一、vue上传视频到七牛云然后返回key值  拼接上前缀域名  把链接传给后台
+步骤：
+    1.直接用下面这个插件el-upload
+    <el-form-item label="上传视频:">
+        <div class="upload-demo">
+            <el-upload
+                ref="upload"
+                v-show="upLoading"
+                drag
+                :multiple="false"
+                action="//up.qiniu.com/"
+                accept="video/*,application/pdf,image/*"   //控制上传的文件格式(视频，pdg，图片)
+                :show-file-list="false"
+                :unique_names="false"
+                :on-success="uploadSuccess" //上传成功以后的方法
+                :before-upload="beforeUpload" //上传之前进行的方法
+                :on-progress="onprogressUpload" //上传的进度条
+                :data="qiniuForm"   //data里面需要定义qiniuForm对象，里面包含'key'和'token'两个参数
+                :limit="1">
+                <i class="el-icon-upload"></i>
+                <div class="el-upload__text">将文件拖到此处，或<em>点击上传</em></div>
+                <div class="el-upload__tip" slot="tip">只能上传mp4/mov文件，且不超过100MB</div>
+            </el-upload>
+            <video :src="videoUrl" controls preload="auto" width="300px" height="300px" id="videoElement"></video>
+            <div class="text-center" v-show="upLoadingvideo">
+                <el-progress type="circle" :percentage="percentage"></el-progress>
+            </div>
+            <div class="text-center" v-show="upLoadingvideo" style="margin-top: 15px">
+                <el-button type="text" round style="margin-top: 15px" size="mini">正在上传，请不要关闭当前窗口...
+                </el-button>
+            </div>
+        </div>
+    </el-form-item>
+    2.在上传之前去七牛请求token值
+    <script>
+            //上传前置操作
+            beforeUpload(file) {
+                console.log(file)
+                let that = this
+                const isJPG = file.type === 'video/mov'
+                const isPNG = file.type === 'video/mp4'
+                const isLt2M = file.size / 1024 / 1024 <= 100
+                if (!isJPG && !isPNG) {//这里去判断上传的格式，规定只能上传规定的格式
+                    this.$message.error('上传视频文件只能是 mov/mp4 格式!')
+                    return false
+                }
+                if (!isLt2M) {
+                    this.$message.error('上传视频文件大小不能超过 100MB!')
+                    return false
+                }
+                //获取七牛的token，基于axios封装的请求方式
+                return this.$axios.post('https://api.datalove.cn/assessment190/config/getQiniuToken', {}).then(res => {
+                    console.log(res.data)
+                    if (res.data.code == 200 && res.data.msg == "成功") {
+                        that.upLoading = true
+                        that.qiniuForm = res.data
+                        //下面这一步操作是自己拼接key值上传到七牛，然后七牛再返回来，
+                        //自己拼接的是带后缀名字的，七牛原先返回的是只有一串纯key值
+                        this.qiniuForm.key='education/'+this.guid()+"."+file.type.substring(file.type.lastIndexOf("/")+1)
+                        console.log(this.qiniuForm)
+                    } else {
+                        that.$message.error(res.msg)
+                        return false
+                    }
+                })
+            },
+            //正在上传
+            onprogressUpload(event) {
+                this.percentage = parseInt(event.percent)
+                this.upLoadingvideo=true
+            },
+            //上传成功后操作
+            uploadSuccess(response) {//把一系列的获取到的参数传给后台
+                // console.log(response)
+                this.videoUrl="http://image.datalove.cn/" + response.key
+                this.addData.videoKey=response.key
+                this.editData.videoKey=response.key
+                let key = response.key, that = this
+                //上传成功后，请求后端更新数据库.
+                // this.$axios.post('video/index/index', {key: key}).then(res => {
+                //   that.upLoading = false
+                //   if (res.status == 1) {
+                //     //跳转到新的页面
+                //     that.$router.push({
+                //       'path': '/user/video'
+                //     })
+                //   }else{
+                //     //清除上传文件队列
+                //     that.$refs.upload.clearFiles()
+                //   }
+                // })
+                this.percentage = 100
+                that.upLoading = false
+                that.upLoadingvideo=false
+                that.$refs.upload.clearFiles()
+                setTimeout(()=>{
+                    if(document.getElementById("videoElement")){//这个是获取视频的时长，前提是先让video标签显示在页面上，然后通过duration获取
+                        this.videoTime=(document.getElementById("videoElement").duration)*1000
+                    }else{
+                        this.videoTime=(document.getElementById("editvideoElement").duration)*1000
+                    }
+                    console.log(this.videoTime);
+                },800)
+            },
+             guid(){//生成一段随机号码来拼接key
+                return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+                    var r = Math.random()*16|0, v = c == 'x' ? r : (r&0x3|0x8);
+                    return v.toString(16);
+                });
+            }
+    </script>
+    <script>
+        //获取地址栏参数
+        function UrlSearch() {
+            let name, value;
+            let str = location.href; //取得整个地址栏
+        //    let str = 'http://192.168.1.180:8090/home?userId=18'; //取得整个地址栏
+            let num = str.indexOf("?");
+            str = str.substr(num + 1); //取得所有参数
+
+            let arr = str.split("&"); //各个参数放到数组里
+            for (let i = 0; i < arr.length; i++) {
+                num = arr[i].indexOf("=");
+                if (num > 0) {
+                    name = arr[i].substring(0, num);
+                    value = arr[i].substr(num + 1);
+                    this[name] = decodeURI(value);
+                }
+            }
+        }
+        //用法(实例化):let Request = new UrlSearch();
+
+        //时间戳转化成日期
+        function formatDate(time) {
+            let date = new Date(time);
+            Y = date.getFullYear() + '-';
+            M = (date.getMonth() + 1 < 10 ? '0' + (date.getMonth() + 1) : date.getMonth() + 1) + '-';
+            D = date.getDate() + ' ';
+            h = date.getHours() + ':';
+            m = date.getMinutes() + ':';
+            s = date.getSeconds();
+            return Y + M + D + h + m + s;
+        }
+
+        function b64DecodeUnicode(str) {
+            return decodeURIComponent(atob(str).split('').map(function (c) {
+                return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
+            }).join(''));
+        }
+        //验证身份证
+        var idCardError = '';
+        var idCardInfo = {
+            gender: "",   //性别
+            birthday: "", // 出生日期(yyyy-mm-dd)
+            userAge: ""
+        };
+        //根据返回值是不是  "验证通过！" 来判断
+        function isidCard(idcard) {
+            var Errors = new Array("验证通过！", "身份证号码位数不对!", "身份证号码出生日期超出范围或含有非法字符!", "身份证号码校验错误!", "身份证地区非法!","身份证号不能为空");
+            var area = {
+                11: "北京",
+                12: "天津",
+                13: "河北",
+                14: "山西",
+                15: "内蒙古",
+                21: "辽宁",
+                22: "吉林",
+                23: "黑龙江",
+                31: "上海",
+                32: "江苏",
+                33: "浙江",
+                34: "安徽",
+                35: "福建",
+                36: "江西",
+                37: "山东",
+                41: "河南",
+                42: "湖北",
+                43: "湖南",
+                44: "广东",
+                45: "广西",
+                46: "海南",
+                50: "重庆",
+                51: "四川",
+                52: "贵州",
+                53: "云南",
+                54: "西藏",
+                61: "陕西",
+                62: "甘肃",
+                63: "青海",
+                64: "宁夏",
+                65: "xinjiang",
+                71: "台湾",
+                81: "香港",
+                82: "澳门",
+                91: "国外"
+            };
+            var idcard, Y, JYM, sBirthday, sex;
+            var S, M, ereg;
+            var idcard_array = [];
+            idcard_array = idcard.split("");
+            if(!isEmpty(idcard)){
+                return idCardError = Errors[5];
+            }
+            if (area[parseInt(idcard.substr(0, 2))] == null) {
+                return idCardError = Errors[4];
+            }
+            switch (idcard.length) {
+                case 15:
+                    if ((parseInt(idcard.substr(6, 2)) + 1900) % 4 == 0 || ((parseInt(idcard.substr(6, 2)) + 1900) % 100 == 0 && (parseInt(idcard.substr(6, 2)) + 1900) % 4 == 0)) {
+                        ereg = /^[1-9][0-9]{5}[0-9]{2}((01|03|05|07|08|10|12)(0[1-9]|[1-2][0-9]|3[0-1])|(04|06|09|11)(0[1-9]|[1-2][0-9]|30)|02(0[1-9]|[1-2][0-9]))[0-9]{3}$/;//测试出生日期的合法性
+                    } else {
+                        ereg = /^[1-9][0-9]{5}[0-9]{2}((01|03|05|07|08|10|12)(0[1-9]|[1-2][0-9]|3[0-1])|(04|06|09|11)(0[1-9]|[1-2][0-9]|30)|02(0[1-9]|1[0-9]|2[0-8]))[0-9]{3}$/;//测试出生日期的合法性
+                    }
+                    if (ereg.test(idcard)) {
+                        var aday = '19' + idcard.substring(6, 12);
+                        idCardInfo.birthday = formateDateCN(aday);
+                        if (parseInt(idcard.charAt(14)) % 2 == 0) {
+                            idCardInfo.gender = '女';
+                        } else {
+                            idCardInfo.gender = '男';
+                        }
+                        var date = new Date();
+                        var year = date.getFullYear();
+                        var birthday_year = parseInt(aday.substr(0, 4));
+                        idCardInfo.userAge = year - birthday_year;
+                        window.sessionStorage.setItem("idCardInfo", JSON.stringify(idCardInfo));
+                        return idCardError = Errors[0];
+                    } else {
+                        return idCardError = Errors[2];
+                    }
+                    break;
+                case 18:
+                    if (parseInt(idcard.substr(6, 4)) % 4 == 0 || (parseInt(idcard.substr(6, 4)) % 100 == 0 && parseInt(idcard.substr(6, 4)) % 4 == 0)) {
+                        ereg = /^[1-9][0-9]{5}19[0-9]{2}((01|03|05|07|08|10|12)(0[1-9]|[1-2][0-9]|3[0-1])|(04|06|09|11)(0[1-9]|[1-2][0-9]|30)|02(0[1-9]|[1-2][0-9]))[0-9]{3}[0-9Xx]$/;//闰年出生日期的合法性正则表达式
+                    } else {
+                        ereg = /^[1-9][0-9]{5}19[0-9]{2}((01|03|05|07|08|10|12)(0[1-9]|[1-2][0-9]|3[0-1])|(04|06|09|11)(0[1-9]|[1-2][0-9]|30)|02(0[1-9]|1[0-9]|2[0-8]))[0-9]{3}[0-9Xx]$/;//平年出生日期的合法性正则表达式
+                    }
+                    if (ereg.test(idcard)) {
+                        S = (parseInt(idcard_array[0]) + parseInt(idcard_array[10])) * 7 + (parseInt(idcard_array[1]) + parseInt(idcard_array[11])) * 9 + (parseInt(idcard_array[2]) + parseInt(idcard_array[12])) * 10 + (parseInt(idcard_array[3]) + parseInt(idcard_array[13])) * 5 + (parseInt(idcard_array[4]) + parseInt(idcard_array[14])) * 8 + (parseInt(idcard_array[5]) + parseInt(idcard_array[15])) * 4 + (parseInt(idcard_array[6]) + parseInt(idcard_array[16])) * 2 + parseInt(idcard_array[7]) * 1 + parseInt(idcard_array[8]) * 6 + parseInt(idcard_array[9]) * 3;
+                        Y = S % 11;
+                        M = "F";
+                        JYM = "10X98765432";
+                        M = JYM.substr(Y, 1);
+                        if (M == idcard_array[17]) {
+                            var aday = idcard.substring(6, 14);
+                            idCardInfo.birthday = formateDateCN(aday);
+                            if (parseInt(idcard.charAt(16)) % 2 == 0) {
+                                idCardInfo.gender = '女';
+                            } else {
+                                idCardInfo.gender = '男';
+                            }
+                            var date = new Date();
+                            var year = date.getFullYear();
+                            var birthday_year = parseInt(idcard.substr(6, 4));
+                            var age = year - birthday_year;
+                            idCardInfo.userAge = age;
+                            window.sessionStorage.setItem("idCardInfo", JSON.stringify(idCardInfo));
+                            return idCardError = Errors[0];
+                        } else {
+                            return idCardError = Errors[3];
+                        }
+                    } else
+                        return idCardError = Errors[2];
+                    break;
+                default:
+                    return idCardError = Errors[1];
+                    break;
+            }
+        }
+
+        function formateDateCN(day) {
+            var yyyy = day.substring(0, 4);
+            var mm = day.substring(4, 6);
+            var dd = day.substring(6);
+            return yyyy + '-' + mm + '-' + dd;
+        }
+
+
+    </script>
+   
